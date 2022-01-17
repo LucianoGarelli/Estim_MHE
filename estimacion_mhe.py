@@ -21,10 +21,11 @@ S = np.pi * (0.5 * diam) ** 2
 g= 9.81  # aceleración de la gravedad
 
 # Path to data
-Resul = ['Resu_RBD/Caso_B07_Cn_p/']
+Resul = ['Resu_RBD/Caso_B07_m/']
 
 #Read forces-moments data
 data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)
+datam = np.loadtxt(Resul[0]+'Moments_proc.txt', delimiter=',', skiprows=1)
 xned = []
 h5f = h5py.File(Resul[0]+'Data.hdf5','r')
 # Read data from hdf5
@@ -56,10 +57,11 @@ q = data[:, 8]
 r = data[:, 9]
 grav = data[:, 10:13]  # gx, gy, gz
 F_body = data[:, 13:16]  # FX, FY, FZ
+F_body = np.column_stack([F_body,datam[:, 6:7]])
+#M_body = datam[:, 6:9]  # MX, MY, MZ
 
-
-Ncoef = 4 # cant de coef a estimar
-Ny = 3
+Ncoef = 5 # cant de coef a estimar
+Ny = 4
 Nw = Ncoef
 Nv = Ny # cant ruido medicion, simil cant mediciones
 Np = 5 # cant de parametros al solver
@@ -67,9 +69,9 @@ Nt = 10  # horizonte
 Nu = 0
 
 Q = np.diag([100.] * Ncoef)  # matrix de covarianza de ruido de proceso
-R = np.diag([.1, .1, .1])     # matrix de covarianza de ruido de  medición
+R = np.diag([.1]*Ny)     # matrix de covarianza de ruido de  medición
 #P = np.diag([10.] * Ncoef)    # matrix de covarianza de estimación inicial
-P = np.diag([10.,1E6,1E4,1E6])    # matrix de covarianza de estimación inicial
+P = np.diag([10.,1E6,1E4,1E6,1E3])    # matrix de covarianza de estimación inicial
 
 Q_inv = linalg.inv(Q)
 R_inv = linalg.inv(R)
@@ -84,6 +86,7 @@ def meas(x, p):
     x[1]: Cl_alpha
     x[2]: Cd2
     x[3]: Cn_p_alfa
+    x[4]: Clp
     p[0]: vt
     p[1]: alpha
     p[2]: beta
@@ -92,6 +95,7 @@ def meas(x, p):
     y[0]: Fx
     y[1]: Fy
     y[2]: Fz
+    y[3]: Mx
     '''
     qdy = 0.5 * 1.225 * p[0] ** 2
     y = casadi.SX.zeros(Ny)
@@ -103,12 +107,14 @@ def meas(x, p):
     Cd = x[0] + x[2] * p[3]
     CL_alfa = x[1]
     Cn_p_alfa = x[3]
+    Clp = x[4]
     #Forces
     y[0] = qdy*S*(-Cd*ca*cb + CL_alfa*(sb**2 + sa**2 * cb**2))
     y[1] = qdy*S*(-Cd*sb - CL_alfa*(ca*sb*cb) - Cn_p_alfa*p[4]*diam*(sa*cb)/p[0])
     y[2] = qdy*S*(-Cd*sa*cb - CL_alfa*(sa*ca*cb**2) + Cn_p_alfa*p[4]*diam*sb/p[0])
     #Moments
-    assert Ny == 3
+    y[3] = qdy * S * diam * (p[4] * diam / p[0]) * Clp
+    assert Ny == 4
     return y
 
 # no importa el Delta que ponga (por cómo es mi "ode")
@@ -131,8 +137,8 @@ lx = mpctools.getCasadiFunc(lxfunc, [Ncoef, Ncoef, (Ncoef, Ncoef)], ["x", "x0bar
 
 xhat = np.zeros((N, Ncoef))
 yhat = np.zeros((N, Nv))
-#x0bar = np.zeros(Ncoef)
-x0bar = np.array([0,0,0,0]) # valor inicio al para el solver
+x0bar = np.zeros(Ncoef)
+#x0bar = np.array([0,0,0,0,0]) # valor inicio al para el solver
 guess = {}
 
 

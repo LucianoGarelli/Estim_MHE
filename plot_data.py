@@ -7,7 +7,7 @@ import math as math
 
 def plot_data(Resul, data, mach, x):
 
-    #Read forces-moments data
+    #Read forces data
     data_ref = np.loadtxt(Resul[0]+'Force_coef_proc.txt', delimiter=',', skiprows=1)
     mach_ref = data_ref[:,1]
     Cd0_ref = data_ref[:,5]
@@ -43,6 +43,45 @@ def plot_data(Resul, data, mach, x):
     ax[2].set_title('Cd vs Mach')
     ax[3].set_title('Cl vs Mach')
     ax[4].set_title('Cn_p_alfa vs Mach')
+
+    #Read moments data
+    data_ref = np.loadtxt(Resul[0]+'Moment_coef_proc.txt', delimiter=',', skiprows=1)
+    mach_ref = data_ref[:,1]
+    Clp_ref = data_ref[:,4]
+    Cm_alfa_ref = data_ref[:,5]
+    Cm_p_alfa_ref = data_ref[:,6]
+    Cm_q_ref = data_ref[:,7]
+    Cn_beta_ref = data_ref[:,8]
+    Cn_r_ref = data_ref[:,9]
+
+    fig_size = (12,4)
+    time = data[:,0]
+    alpha = data[:, 1]
+    beta = data[:, 2]
+
+    # Estimacion
+    # Grafico de coeficientes
+    f, ax = plt.subplots(1,5, figsize=fig_size)
+    #for k in range(3):
+    ax[0].plot(mach, x[:,4])
+    ax[0].plot(mach_ref, Clp_ref)
+    #ax[1].plot(mach, x[:,2])
+    ax[1].plot(mach_ref, Cm_alfa_ref)
+    #ax[2].plot(mach, x[:,1])
+    ax[2].plot(mach_ref, Cm_p_alfa_ref)
+
+    #ax[3].plot(mach, x[:,0] + x[:,2]*delta2)
+    ax[3].plot(mach_ref, Cm_q_ref)
+
+    #ax[4].plot(mach, x[:,3])
+    ax[4].plot(mach_ref, Cn_beta_ref)
+
+    ax[0].set_title('Clp vs Mach')
+    ax[1].set_title('Cm_alfa_ref vs Mach')
+    ax[2].set_title('Cm_p_alfa_ref vs Mach')
+    ax[3].set_title('Cm_q_ref vs Mach')
+    ax[4].set_title('Cn_beta_ref vs Mach')
+
 
     plt.show()
     return
