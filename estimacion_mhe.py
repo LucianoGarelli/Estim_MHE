@@ -9,56 +9,67 @@ import matplotlib.pyplot as plt
 import mpctools
 import casadi
 from scipy import linalg
+import h5py
 
-diam = 0.04
-rho = 1.225
+from parameters import parameters
+from fluid_prop import fluid_prop
+from plot_data import plot_data
+
+m, diam, xcg, ycg, zcg, Ixx, Iyy, Izz, steps, dt = parameters('./Data/data_C_B04_7_exC10.dat')
+
 S = np.pi * (0.5 * diam) ** 2
+g= 9.81  # aceleración de la gravedad
 
-CASO = 0
+# Path to data
+Resul = ['Resu_RBD/Caso_B07_Cn_p/']
 
-# carga dato una sola corrida
-#
-#data = np.loadtxt('Resu_RBD/' + ['Forces_proc_C01a0_25.txt'][CASO], delimiter=',', skiprows=1)
-data = np.loadtxt('Resu_RBD/' + 'Forces_proc_C_B03.txt', delimiter=',', skiprows=1)
-#
-# carga datos, solo drag
-#data = np.loadtxt('Resu_RBD/' + ['Forces_proc_B03.txt', 'Forces_proc_B04.txt', 'Forces_proc_B06.txt'][CASO], delimiter=',', skiprows=1) #mail_nicolas/ hace alusion a la carpeta | skiprows=1 saltea la primer fila xq es el encabezado
-#
-# carga datos, drag + lift
-#data = np.loadtxt('Resu_RBD/' + ['Forces_proc_C_C01.txt', 'Forces_proc_C_C02.txt', 'Forces_proc_C_C03.txt'][CASO], delimiter=',', skiprows=1) #mail_nicolas/ hace alusion a la carpeta | skiprows=1 saltea la primer fila xq es el encabezado
+#Read forces-moments data
+data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)
+xned = []
+h5f = h5py.File(Resul[0]+'Data.hdf5','r')
+# Read data from hdf5
+xned.append(h5f['/Inertial_coord'][:])
+h5f.close()
+
+# Propiedades fluido vs altura
 N = data.shape[0]
+rho, mu, c = fluid_prop(xned[0][1:N+1,2], 0)
+rho=rho.reshape(-1,1)
 
 print(data.shape)
 
 # Encabezado del txt:
-# Time, alpha, beta, delta2, V_inf (= V_t), u(v_body_X), v(v_body_Y), w(v_body_Z), p, q, r, gx, gy, gz, FX_body, FY_body, FZ_body
+# Time, alpha, beta, V_inf (= V_t), u(v_body_X), v(v_body_Y), w(v_body_Z), p, q, r, gx, gy, gz, FX, FY, FZ
 
+time = data[:,0]
 alpha = data[:, 1]
 beta = data[:, 2]
-delta2 = data[:, 3]  # alpha2
-vt = data[:, 4]
-u = data[:, 5]  # vel_body_X
-v = data[:, 6]  # vel_body_Y
-w = data[:, 7]  # vel_body_Z
-p = data[:, 8]
-q = data[:, 9]
-r = data[:, 10]
-grav = data[:, 11:14]  # gx, gy, gz
-F_body = data[:, 13:16]  # FX_body, FY_body, FZ_body
+delta2 = ((np.sin(beta))**2 + (np.cos(beta))**2*(np.sin(alpha))**2) # alpha2
+vt = data[:, 3]
+mach = vt/c
+u = data[:, 4]  # vel_body_X
+v = data[:, 5]  # vel_body_Y
+w = data[:, 6]  # vel_body_Z
+p = data[:, 7]
+#np.column_stack([p, rho])
+q = data[:, 8]
+r = data[:, 9]
+grav = data[:, 10:13]  # gx, gy, gz
+F_body = data[:, 13:16]  # FX, FY, FZ
 
-# F_body = F_body - grav  # FIXME
 
-Ncoef = 3 # cant de coef a estimar
+Ncoef = 4 # cant de coef a estimar
 Ny = 3
 Nw = Ncoef
 Nv = Ny # cant ruido medicion, simil cant mediciones
-Np = 4 # cant de parametros al solver
+Np = 5 # cant de parametros al solver
 Nt = 10  # horizonte
 Nu = 0
 
 Q = np.diag([100.] * Ncoef)  # matrix de covarianza de ruido de proceso
 R = np.diag([.1, .1, .1])     # matrix de covarianza de ruido de  medición
-P = np.diag([10.] * Ncoef)    # matrix de covarianza de estimación inicial
+#P = np.diag([10.] * Ncoef)    # matrix de covarianza de estimación inicial
+P = np.diag([10.,1E6,1E4,1E6])    # matrix de covarianza de estimación inicial
 
 Q_inv = linalg.inv(Q)
 R_inv = linalg.inv(R)
@@ -72,19 +83,31 @@ def meas(x, p):
     x[0]: Cd0
     x[1]: Cl_alpha
     x[2]: Cd2
+    x[3]: Cn_p_alfa
     p[0]: vt
     p[1]: alpha
     p[2]: beta
     p[3]: delta2
+    p[4]: p(rolling)
     y[0]: Fx
     y[1]: Fy
     y[2]: Fz
     '''
-    qdy = 0.5 * rho * p[0] ** 2
+    qdy = 0.5 * 1.225 * p[0] ** 2
     y = casadi.SX.zeros(Ny)
-    y[0] = -qdy * S * np.cos(p[1]) * np.cos(p[2]) * (x[0]+x[2]*p[3]) + qdy * S * x[1] * (1-(np.cos(p[1])**2 * np.cos(p[2])**2))
-    y[1] = -qdy * S * np.sin(p[2]) * (x[0]+x[2]*p[3]) - qdy * S * x[1] * np.cos(p[1]) * np.cos(p[2]) * np.sin(p[2])
-    y[2] = -qdy * S * np.sin(p[1]) * np.cos(p[2]) * (x[0]+x[2]*p[3]) + qdy * S * x[1] * np.cos(p[1]) * np.sin(p[1]) * np.cos(p[2])**2
+
+    ca = np.cos(p[1])
+    sa = np.sin(p[1])
+    cb = np.cos(p[2])
+    sb = np.sin(p[2])
+    Cd = x[0] + x[2] * p[3]
+    CL_alfa = x[1]
+    Cn_p_alfa = x[3]
+    #Forces
+    y[0] = qdy*S*(-Cd*ca*cb + CL_alfa*(sb**2 + sa**2 * cb**2))
+    y[1] = qdy*S*(-Cd*sb - CL_alfa*(ca*sb*cb) - Cn_p_alfa*p[4]*diam*(sa*cb)/p[0])
+    y[2] = qdy*S*(-Cd*sa*cb - CL_alfa*(sa*ca*cb**2) + Cn_p_alfa*p[4]*diam*sb/p[0])
+    #Moments
     assert Ny == 3
     return y
 
@@ -108,8 +131,8 @@ lx = mpctools.getCasadiFunc(lxfunc, [Ncoef, Ncoef, (Ncoef, Ncoef)], ["x", "x0bar
 
 xhat = np.zeros((N, Ncoef))
 yhat = np.zeros((N, Nv))
-x0bar = np.zeros(Ncoef)
-#x0bar = np.array([200,10]) # valor inicio al para el solver
+#x0bar = np.zeros(Ncoef)
+x0bar = np.array([0,0,0,0]) # valor inicio al para el solver
 guess = {}
 
 
@@ -176,7 +199,7 @@ for k in range(N):
     tmin = max(0, k - Nt)
     tmax = k+1  # para que en los slice cuando ponga :tmax tome hasta k *inclusive*
 
-    p_coefs = np.vstack((vt[tmin:tmax], alpha[tmin:tmax], beta[tmin:tmax], delta2[tmin:tmax])).T
+    p_coefs = np.vstack((vt[tmin:tmax], alpha[tmin:tmax], beta[tmin:tmax], delta2[tmin:tmax], p[tmin:tmax])).T
     assert p_coefs.shape == (N["t"] + 1, Np)
 
 
@@ -230,108 +253,5 @@ Cd2_estim = xhat[:, 2]
 
 Cd_estim = Cd0_estim + Cd2_estim * delta2
 
-#
-# carga datos 1 sola corrida
-#coefs_reales = np.loadtxt('Resu_RBD/' + ['Force_coef_proc_C01a0_25.txt'][CASO], delimiter=',', skiprows=1)
+plot_data(Resul, data, mach, xhat)
 
-# Encabezado del txt:
-# Time,   Mach,     alfa,     beta,     delta2,     Cd,     CL_alfa,     Cn_p_alfa,     Cn_q_alfa
-
-#t = coefs_reales[:, 0]
-#mach = coefs_reales[:, 1]
-#Cd_real = coefs_reales[:, 5]
-#Cl_real = coefs_reales[:, 6]
-
-
-#
-# Cd
-#
-
-# estimacion
-# Grafico el coeficiente
-f, ax = plt.subplots(3)
-#ax[0].plot(mach, Cd_real,'o', label='Cd Real')
-ax[0].plot(mach, Cd_estim, label='Cd Estimado')
-ax[0].legend()
-ax[0].set_xlim([min(mach), max(mach)])
-ax[0].set_title('Cd vs Mach')
-
-# me fijo tamanos
-print("%------------------------------%")
-print("size(t): ", np.size(t))
-print("size(mach): ", np.size(mach))
-print("%------------------------------%")
-
-# queriamos hacer una funcion para el secondary_xaxis
-def cdt(x):
-    return 
-
-#ax[1].plot(t, Cd_real,'o', label='Cd Real')
-ax[1].plot(t, Cd_estim, label='Cd Estimado')
-ax[1].legend()
-ax[1].set_xlim([0, max(t)])
-ax[1].set_title('Cd vs tiempo')
-#secax = ax[1].secondary_xaxis('top', mach)
-#secax.set_xlabel('Mach')
-
-
-ax[2].plot(mach, Cd_estim, label='Cd Estim')
-ax[2].plot(mach, Cd0_estim, label='Cd0')
-ax[2].plot(mach, Cd2_estim*delta2, label='Cdd2*delta2')
-ax[2].legend()
-ax[2].set_xlim([min(mach), max(mach)])
-ax[2].set_title('Cd vs Mach')
-
-plt.tight_layout()
-plt.savefig('Figures/CD - ' + ['Caso 8', 'Caso 10', 'Caso 11'][CASO] + '.png', bbox_inches='tight')
-
-## Grafico errores
-f, ax = plt.subplots(2)
-ax[0].plot(mach, Cd_real - Cd_estim)
-ax[0].set_xlim([min(mach), max(mach)])
-ax[0].set_title('Error en Cd vs Mach')
-
-ax[1].plot(t, Cd_real - Cd_estim)
-ax[1].set_xlim([0, max(t)])
-ax[1].set_title('Error en Cd vs tiempo')
-
-plt.tight_layout()
-plt.savefig('Figures/CD_error - ' + ['Caso 8', 'Caso 10', 'Caso 11'][CASO] + '.png', bbox_inches='tight')
-'''
-#
-# Cl
-#
-# Grafico el coeficiente
-f, ax = plt.subplots(2)
-ax[0].plot(mach, Cl_real, label='Cl Real')
-ax[0].plot(mach, Cl_estim, label='Cl Estimado')
-ax[0].legend()
-ax[0].set_xlim([min(mach), max(mach)])
-ax[0].set_title('Cl vs Mach')
-
-ax[1].plot(t, Cl_real, label='Cl Real')
-ax[1].plot(t, Cl_estim, label='Cl Estimado')
-ax[1].legend()
-ax[1].set_xlim([0, max(t)])
-ax[1].set_title('Cl vs tiempo')
-
-plt.tight_layout()
-plt.savefig('Figures/Cl - ' + ['Caso 8', 'Caso 10', 'Caso 11'][CASO] + '.png', bbox_inches='tight')
-
-## Grafico errores 
-f, ax = plt.subplots(2)
-ax[0].plot(mach, Cl_real - Cl_estim)
-ax[0].set_xlim([min(mach), max(mach)])
-ax[0].set_title('Error en Cl vs Mach')
-
-ax[1].plot(t, Cl_real - Cl_estim)
-ax[1].set_xlim([0, max(t)])
-ax[1].set_title('Error en Cl vs tiempo')
-
-plt.tight_layout()
-plt.savefig('Figures/Cl_error - ' + ['Caso 8', 'Caso 10', 'Caso 11'][CASO] + '.png', bbox_inches='tight')
-
-#plt.show()
-'''
-
-plt.show()
