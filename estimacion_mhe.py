@@ -36,7 +36,6 @@ h5f.close()
 # Propiedades fluido vs altura
 N = data.shape[0]
 rho, mu, c = fluid_prop(xned[0][1:N+1,2], 0)
-rho=rho.reshape(-1,1)
 
 print(data.shape)
 
@@ -53,7 +52,6 @@ u = data[:, 4]  # vel_body_X
 v = data[:, 5]  # vel_body_Y
 w = data[:, 6]  # vel_body_Z
 p = data[:, 7]
-#np.column_stack([p, rho])
 q = data[:, 8]
 r = data[:, 9]
 grav = data[:, 10:13]  # gx, gy, gz
@@ -65,15 +63,15 @@ Ncoef = 8 # cant de coef a estimar
 Ny = 6
 Nw = Ncoef
 Nv = Ny # cant ruido medicion, simil cant mediciones
-Np = 7 # cant de parametros al solver
+Np = 8 # cant de parametros al solver
 Nt = 10  # horizonte
 Nu = 0
 
 Q = np.diag([100.] * Ncoef)  # matrix de covarianza de ruido de proceso
 R = np.diag([.1]*Ny)     # matrix de covarianza de ruido de  medición
 #P = np.diag([10.] * Ncoef)    # matrix de covarianza de estimación inicial
-
-P = np.diag([1E4,1E1,1E1,1E3,1E1, 1E1, 1E1, 1E1])    # matrix de covarianza de estimación inicial
+#           [Cd0, Cl_alpha, Cd2, Cn_p_alpha, Clp, Cm_alpha, Cm_alpha, Cm_q]
+P = np.diag([1E4, 1E1, 1E1, 1E3, 1E1, 1E1, 1E5, 1E5])    # matrix de covarianza de estimación inicial
 
 Q_inv = linalg.inv(Q)
 R_inv = linalg.inv(R)
@@ -90,7 +88,8 @@ def meas(x, p):
     x[3]: Cn_p_alfa
     x[4]: Clp
     x[5]: Cm_alpha
-    x[6]: Cm_q
+    x[6]: Cm_p_alpha
+    x[7]: Cm_q
     p[0]: vt
     p[1]: alpha
     p[2]: beta
@@ -98,6 +97,7 @@ def meas(x, p):
     p[4]: p(rolling)
     p[5]: q
     p[6]: r
+    p[7]: altura
     y[0]: Fx
     y[1]: Fy
     y[2]: Fz
@@ -105,7 +105,7 @@ def meas(x, p):
     y[4]: My
     y[5]: Mz
     '''
-    qdy = 0.5 * 1.225 * p[0] ** 2
+    qdy = 0.5 * p[7] * p[0] ** 2
     y = casadi.SX.zeros(Ny)
 
     ca = np.cos(p[1])
@@ -219,7 +219,7 @@ for k in range(N):
     tmax = k+1  # para que en los slice cuando ponga :tmax tome hasta k *inclusive*
 
     p_coefs = np.vstack((vt[tmin:tmax], alpha[tmin:tmax], beta[tmin:tmax], delta2[tmin:tmax], p[tmin:tmax], q[tmin:tmax],
-                         r[tmin:tmax])).T
+                         r[tmin:tmax], rho[tmin:tmax])).T
     assert p_coefs.shape == (N["t"] + 1, Np)
 
 
