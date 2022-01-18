@@ -30,9 +30,9 @@ def plot_data(Resul, data, mach, x):
     ax[0].plot(mach_ref, Cd0_ref,label=leg[1])
     ax[1].plot(mach, x[:,2])
     ax[1].plot(mach_ref, Cdd2_ref)
-    ax[2].plot(time, alpha * 180 / np.pi, label=leg[2])
-    ax[2].plot(time, beta * 180 / np.pi, label=leg[3])
-    ax[2].plot(time, np.sqrt(delta2) * 180 / np.pi, label=leg[4])
+    ax[2].plot(mach_ref, alpha * 180 / np.pi, label=leg[2])
+    ax[2].plot(mach_ref, beta * 180 / np.pi, label=leg[3])
+    ax[2].plot(mach_ref, np.sqrt(delta2) * 180 / np.pi, label=leg[4])
     ax[0].legend()
     ax[2].legend()
 
