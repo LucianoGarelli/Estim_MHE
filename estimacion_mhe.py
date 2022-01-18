@@ -14,14 +14,15 @@ import h5py
 from parameters import parameters
 from fluid_prop import fluid_prop
 from plot_data import plot_data
+from plot_data_time import plot_data_time
 
-m, diam, xcg, ycg, zcg, Ixx, Iyy, Izz, steps, dt = parameters('./Data/data_C_B04_7_exC10.dat')
+m, diam, xcg, ycg, zcg, Ixx, Iyy, Izz, steps, dt = parameters('./Data/data_E01.dat')
 
 S = np.pi * (0.5 * diam) ** 2
 g= 9.81  # aceleración de la gravedad
 
 # Path to data
-Resul = ['Resu_RBD/Caso_B07_m/']
+Resul = ['Resu_RBD/Caso_E01/']
 
 #Read forces-moments data
 data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)
@@ -57,21 +58,22 @@ q = data[:, 8]
 r = data[:, 9]
 grav = data[:, 10:13]  # gx, gy, gz
 F_body = data[:, 13:16]  # FX, FY, FZ
-F_body = np.column_stack([F_body,datam[:, 6:7]])
+F_body = np.column_stack([F_body,datam[:, 6:9]])
 #M_body = datam[:, 6:9]  # MX, MY, MZ
 
-Ncoef = 5 # cant de coef a estimar
-Ny = 4
+Ncoef = 8 # cant de coef a estimar
+Ny = 6
 Nw = Ncoef
 Nv = Ny # cant ruido medicion, simil cant mediciones
-Np = 5 # cant de parametros al solver
+Np = 7 # cant de parametros al solver
 Nt = 10  # horizonte
 Nu = 0
 
 Q = np.diag([100.] * Ncoef)  # matrix de covarianza de ruido de proceso
 R = np.diag([.1]*Ny)     # matrix de covarianza de ruido de  medición
 #P = np.diag([10.] * Ncoef)    # matrix de covarianza de estimación inicial
-P = np.diag([10.,1E6,1E4,1E6,1E3])    # matrix de covarianza de estimación inicial
+
+P = np.diag([1E4,1E1,1E1,1E3,1E1, 1E1, 1E1, 1E1])    # matrix de covarianza de estimación inicial
 
 Q_inv = linalg.inv(Q)
 R_inv = linalg.inv(R)
@@ -87,15 +89,21 @@ def meas(x, p):
     x[2]: Cd2
     x[3]: Cn_p_alfa
     x[4]: Clp
+    x[5]: Cm_alpha
+    x[6]: Cm_q
     p[0]: vt
     p[1]: alpha
     p[2]: beta
     p[3]: delta2
     p[4]: p(rolling)
+    p[5]: q
+    p[6]: r
     y[0]: Fx
     y[1]: Fy
     y[2]: Fz
     y[3]: Mx
+    y[4]: My
+    y[5]: Mz
     '''
     qdy = 0.5 * 1.225 * p[0] ** 2
     y = casadi.SX.zeros(Ny)
@@ -108,13 +116,18 @@ def meas(x, p):
     CL_alfa = x[1]
     Cn_p_alfa = x[3]
     Clp = x[4]
+    Cm_alfa = x[5]
+    Cm_p_alfa = x[6]
+    Cm_q = x[7]
     #Forces
     y[0] = qdy*S*(-Cd*ca*cb + CL_alfa*(sb**2 + sa**2 * cb**2))
     y[1] = qdy*S*(-Cd*sb - CL_alfa*(ca*sb*cb) - Cn_p_alfa*p[4]*diam*(sa*cb)/p[0])
     y[2] = qdy*S*(-Cd*sa*cb - CL_alfa*(sa*ca*cb**2) + Cn_p_alfa*p[4]*diam*sb/p[0])
     #Moments
-    y[3] = qdy * S * diam * (p[4] * diam / p[0]) * Clp
-    assert Ny == 4
+    y[3] = qdy*S*diam*(p[4]*diam/p[0])*Clp
+    y[4] = qdy*S*diam*(Cm_alfa*(sa * cb) - (p[4]*diam/p[0])*(-Cm_p_alfa)*sb + (diam / p[0]) * Cm_q * p[5])
+    y[5] = qdy*S*diam*(-Cm_alfa*sb - (p[4]*diam/p[0])*(-Cm_p_alfa)*(sa*cb) + (diam/p[0])*Cm_q * p[6])
+    assert Ny == 6
     return y
 
 # no importa el Delta que ponga (por cómo es mi "ode")
@@ -205,7 +218,8 @@ for k in range(N):
     tmin = max(0, k - Nt)
     tmax = k+1  # para que en los slice cuando ponga :tmax tome hasta k *inclusive*
 
-    p_coefs = np.vstack((vt[tmin:tmax], alpha[tmin:tmax], beta[tmin:tmax], delta2[tmin:tmax], p[tmin:tmax])).T
+    p_coefs = np.vstack((vt[tmin:tmax], alpha[tmin:tmax], beta[tmin:tmax], delta2[tmin:tmax], p[tmin:tmax], q[tmin:tmax],
+                         r[tmin:tmax])).T
     assert p_coefs.shape == (N["t"] + 1, Np)
 
 
@@ -223,12 +237,12 @@ for k in range(N):
         solver.par["p"] = list(p_coefs)
     sol = mpctools.callSolver(solver)
 
-    print("x0bar",x0bar)
-    print("x0est",sol["x"][0])
+    #print("x0bar",x0bar)
+    #print("x0est",sol["x"][0])
     #input("Presione enter") # esto es para que pause y cont con (enter)
 
-
-    print(("%3d: %s" % (k, sol["status"])))
+    if (k % 500) == 0:
+        print(("%3d: %s" % (k, sol["status"])))
     if sol["status"] != "Solve_Succeeded":
         break
 
@@ -246,18 +260,19 @@ for k in range(N):
 
         # EKF para actualizar la matriz de covarianza P
         [P, _, _, _] = ekf(F, H, x=sol["x"][0, :], u=np.zeros(Nu), w=sol["w"][0, ...], y=F_body[tmin], p=p_coefs[0], P=P, Q=Q, R=R)
-        print("P: ", P)
+        #print("P: ", P)
         x0bar = sol["x"][1]
 
     # Repito el último guess como guess del nuevo instante de tiempo
     for key in guess.keys():
         guess[key] = np.concatenate((guess[key], guess[key][-1:]))
 
-Cd0_estim = xhat[:, 0]
-Cl_estim = xhat[:, 1]
-Cd2_estim = xhat[:, 2]
+#Cd0_estim = xhat[:, 0]
+#Cl_estim = xhat[:, 1]
+#Cd2_estim = xhat[:, 2]
 
-Cd_estim = Cd0_estim + Cd2_estim * delta2
-
-plot_data(Resul, data, mach, xhat)
-
+#Cd_estim = Cd0_estim + Cd2_estim * delta2
+#Plot data vs mach
+#plot_data(Resul, data, mach, xhat)
+#Plot data v time
+plot_data_time(Resul, data, mach, xhat)
