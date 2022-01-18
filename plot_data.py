@@ -36,11 +36,11 @@ def plot_data(Resul, data, mach, x):
     ax[0].legend()
     ax[2].legend()
 
-    ax[3].plot(mach, x[:,1])
-    ax[3].plot(mach_ref, CLa_ref)
+    ax[4].plot(mach, x[:,1])
+    ax[4].plot(mach_ref, CLa_ref)
 
-    ax[4].plot(mach, x[:,0] + x[:,2]*delta2)
-    ax[4].plot(mach_ref, Cd0_ref + Cdd2_ref*delta2)
+    ax[3].plot(mach, x[:,0] + x[:,2]*delta2)
+    ax[3].plot(mach_ref, Cd0_ref + Cdd2_ref*delta2)
 
     ax[5].plot(mach, x[:,3])
     ax[5].plot(mach_ref, Cn_p_alfa)

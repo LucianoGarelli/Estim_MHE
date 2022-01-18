@@ -36,11 +36,11 @@ def plot_data_time(Resul, data, mach, x):
     ax[0].legend()
     ax[2].legend()
 
-    ax[3].plot(time, x[:,1])
-    ax[3].plot(time_ref, CLa_ref)
+    ax[4].plot(time, x[:,1])
+    ax[4].plot(time_ref, CLa_ref)
 
-    ax[4].plot(time, x[:,0] + x[:,2]*delta2)
-    ax[4].plot(time_ref, Cd0_ref + Cdd2_ref*delta2)
+    ax[3].plot(time, x[:,0] + x[:,2]*delta2)
+    ax[3].plot(time_ref, Cd0_ref + Cdd2_ref*delta2)
 
     ax[5].plot(time, x[:,3])
     ax[5].plot(time_ref, Cn_p_alfa)
