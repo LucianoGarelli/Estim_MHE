@@ -273,6 +273,6 @@ for k in range(N):
 
 #Cd_estim = Cd0_estim + Cd2_estim * delta2
 #Plot data vs mach
-#plot_data(Resul, data, mach, xhat)
+plot_data(Resul, data, mach, xhat)
 #Plot data v time
 plot_data_time(Resul, data, mach, xhat)
