@@ -23,7 +23,7 @@ S = np.pi * (0.5 * diam) ** 2
 g= 9.81  # aceleración de la gravedad
 
 # Path to data
-Resul = ['Resu_RBD/Caso_F01/']
+Resul = ['Resu_RBD/Caso_F01_cte/']
 
 #Read forces-moments data
 data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)

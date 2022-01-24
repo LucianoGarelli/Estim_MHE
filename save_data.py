@@ -16,7 +16,7 @@ def save_data(time, mach, x):
 
     #File to write force coeff
     ff = open("./Resultados/Coef_estim.txt", "w")  # xq le pasamos los las fuerzas de todo el CFD??
-    ff.write(" # Time,      Mach,      Cd0,       Cd2,     Cl_alpha,  Cn_p_alpha,    Clp,   Cm_alpha,    Cm_p_alpha,    Cm_q \n")
+    ff.write(" # Time,      Mach,      Cd0,    Cl_alpha,    Cd2,  Cn_p_alpha,    Clp,   Cm_alpha,    Cm_p_alpha,    Cm_q \n")
 
     mach = mach.reshape(-1, 1)
     tt = time.reshape(-1, 1)
