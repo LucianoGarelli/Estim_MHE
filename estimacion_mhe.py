@@ -16,13 +16,13 @@ from fluid_prop import fluid_prop
 from plot_data import plot_data
 from plot_data_time import plot_data_time
 
-m, diam, xcg, ycg, zcg, Ixx, Iyy, Izz, steps, dt = parameters('./Data/data_E01.dat')
+m, diam, xcg, ycg, zcg, Ixx, Iyy, Izz, steps, dt = parameters('./Data/data_F01.dat')
 
 S = np.pi * (0.5 * diam) ** 2
 g= 9.81  # aceleración de la gravedad
 
 # Path to data
-Resul = ['Resu_RBD/Caso_E01/']
+Resul = ['Resu_RBD/Caso_F01/']
 
 #Read forces-moments data
 data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)
@@ -67,11 +67,14 @@ Np = 8 # cant de parametros al solver
 Nt = 10  # horizonte
 Nu = 0
 
-Q = np.diag([100.] * Ncoef)  # matrix de covarianza de ruido de proceso
-R = np.diag([.1]*Ny)     # matrix de covarianza de ruido de  medición
+Q = np.diag([.1] * Ncoef)  # matrix de covarianza de ruido de proceso
+#Q = np.diag([1E1, 1E1, 1E4, 1E-3, 1E1, 1E1, 1E5, 1E5])
+Q[0,0] = 10
+Q[2,2] = 1
+R = np.diag([1]*Ny)     # matrix de covarianza de ruido de  medición
 #P = np.diag([10.] * Ncoef)    # matrix de covarianza de estimación inicial
 #           [Cd0, Cl_alpha, Cd2, Cn_p_alpha, Clp, Cm_alpha, Cm_alpha, Cm_q]
-P = np.diag([1E4, 1E1, 1E1, 1E3, 1E1, 1E1, 1E5, 1E5])    # matrix de covarianza de estimación inicial
+P = np.diag([1E2, 1E1, 1E6, 1E-3, 1E1, 1E1, 1E5, 1E5]) # matrix de covarianza de estimación inicial
 
 Q_inv = linalg.inv(Q)
 R_inv = linalg.inv(R)
@@ -154,6 +157,15 @@ x0bar = np.zeros(Ncoef)
 #x0bar = np.array([0,0,0,0,0]) # valor inicio al para el solver
 guess = {}
 
+#Definition of lower(lb) and upper(ub) bounds for coef estimations
+x_lb = np.array([0, -np.inf, 0, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
+x_ub = np.array([np.inf, np.inf, 10, np.inf, np.inf, np.inf, np.inf, np.inf])
+lb = {
+    "x" : np.tile(x_lb, (Nt+1,1))
+}
+ub = {
+    "x" : np.tile(x_ub, (Nt+1,1))
+}
 
 def ekf(f, h, x, u, w, y, p, P, Q, R, f_jacx=None, f_jacw=None, h_jacx=None):
     """
@@ -227,7 +239,7 @@ for k in range(N):
     if k <= Nt:
         solver = mpctools.nmhe(f=F, h=H, u=np.zeros((tmax-tmin-1, Nu)), p=p_coefs,
                                y=F_body[tmin:tmax, :], l=l, N=N, lx=lx,
-                               x0bar=x0bar, verbosity=0, guess=guess,
+                               x0bar=x0bar, verbosity=0, guess=guess, lb=lb, ub=ub,
                                extrapar=dict(Pinv=linalg.inv(P)), inferargs=True)
     else:
         solver.par["Pinv"] = linalg.inv(P)
@@ -259,7 +271,7 @@ for k in range(N):
             guess[key] = guess[key][1:, ...]  # Tiro el guess más viejo
 
         # EKF para actualizar la matriz de covarianza P
-        [P, _, _, _] = ekf(F, H, x=sol["x"][0, :], u=np.zeros(Nu), w=sol["w"][0, ...], y=F_body[tmin], p=p_coefs[0], P=P, Q=Q, R=R)
+        #[P, _, _, _] = ekf(F, H, x=sol["x"][0, :], u=np.zeros(Nu), w=sol["w"][0, ...], y=F_body[tmin], p=p_coefs[0], P=P, Q=Q, R=R)
         #print("P: ", P)
         x0bar = sol["x"][1]
 
