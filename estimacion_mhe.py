@@ -15,6 +15,7 @@ from parameters import parameters
 from fluid_prop import fluid_prop
 from plot_data import plot_data
 from plot_data_time import plot_data_time
+from save_data import  save_data
 
 m, diam, xcg, ycg, zcg, Ixx, Iyy, Izz, steps, dt = parameters('./Data/data_F01.dat')
 
@@ -279,11 +280,9 @@ for k in range(N):
     for key in guess.keys():
         guess[key] = np.concatenate((guess[key], guess[key][-1:]))
 
-#Cd0_estim = xhat[:, 0]
-#Cl_estim = xhat[:, 1]
-#Cd2_estim = xhat[:, 2]
+#Save estimated coeficients
+save_data(time, mach, xhat)
 
-#Cd_estim = Cd0_estim + Cd2_estim * delta2
 #Plot data vs mach
 plot_data(Resul, data, mach, xhat)
 #Plot data v time
