@@ -23,7 +23,7 @@ S = np.pi * (0.5 * diam) ** 2
 g= 9.81  # aceleración de la gravedad
 
 # Path to data
-Resul = ['Resu_RBD/Caso_F01_cte/']
+Resul = ['Resu_RBD/Caso_F01/']
 
 #Read forces-moments data
 data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)
@@ -245,7 +245,7 @@ for k in range(N):
     else:
         solver.par["Pinv"] = linalg.inv(P)
         solver.par["x0bar"] = x0bar
-        
+        solver.saveguess()
         solver.par["y"] = list(F_body[tmin:tmax, :])
         solver.par["p"] = list(p_coefs)
     sol = mpctools.callSolver(solver)
