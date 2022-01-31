@@ -65,7 +65,7 @@ Ny = 6
 Nw = Ncoef
 Nv = Ny # cant ruido medicion, simil cant mediciones
 Np = 8 # cant de parametros al solver
-Nt = 10  # horizonte
+Nt = 1  # horizonte
 Nu = 0
 
 Q = np.diag([.1] * Ncoef)  # matrix de covarianza de ruido de proceso
@@ -75,7 +75,7 @@ Q[2,2] = 1
 R = np.diag([1]*Ny)     # matrix de covarianza de ruido de  medición
 #P = np.diag([10.] * Ncoef)    # matrix de covarianza de estimación inicial
 #           [Cd0, Cl_alpha, Cd2, Cn_p_alpha, Clp, Cm_alpha, Cm_alpha, Cm_q]
-P = np.diag([1E2, 1E1, 1E6, 1E-3, 1E1, 1E1, 1E5, 1E5]) # matrix de covarianza de estimación inicial
+P = np.diag([1E4, 1E1, 5E5, 1E-3, 1E1, 1E1, 1E5, 1E5]) # matrix de covarianza de estimación inicial
 
 Q_inv = linalg.inv(Q)
 R_inv = linalg.inv(R)
@@ -159,8 +159,9 @@ x0bar = np.zeros(Ncoef)
 guess = {}
 
 #Definition of lower(lb) and upper(ub) bounds for coef estimations
-x_lb = np.array([0, -np.inf, 0, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
-x_ub = np.array([np.inf, np.inf, 10, np.inf, np.inf, np.inf, np.inf, np.inf])
+#                Cd0, Cl_alpha, Cd2, Cn_p_alpha, Clp, Cm_alpha, Cm_p_alpha, Cm_q
+x_lb = np.array([ 0,       0  ,   0, -np.inf, -np.inf,    -np.inf  , -np.inf, -np.inf])
+x_ub = np.array([np.inf, np.inf, 10,     0,       0,         0 ,       np.inf,  0])
 lb = {
     "x" : np.tile(x_lb, (Nt+1,1))
 }
@@ -245,7 +246,7 @@ for k in range(N):
     else:
         solver.par["Pinv"] = linalg.inv(P)
         solver.par["x0bar"] = x0bar
-        solver.saveguess()
+        #solver.saveguess()
         solver.par["y"] = list(F_body[tmin:tmax, :])
         solver.par["p"] = list(p_coefs)
     sol = mpctools.callSolver(solver)
