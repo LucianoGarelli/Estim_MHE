@@ -16,6 +16,7 @@ from fluid_prop import fluid_prop
 from plot_data import plot_data
 from plot_data_time import plot_data_time
 from save_data import  save_data
+from plot_data_noise import plot_data_noise
 
 m, diam, xcg, ycg, zcg, Ixx, Iyy, Izz, steps, dt = parameters('./Data/data_F01.dat')
 
@@ -57,8 +58,17 @@ q = data[:, 8]
 r = data[:, 9]
 grav = data[:, 10:13]  # gx, gy, gz
 F_body = data[:, 13:16]  # FX, FY, FZ
-F_body = np.column_stack([F_body,datam[:, 6:9]])
-#M_body = datam[:, 6:9]  # MX, MY, MZ
+F_body = np.column_stack([F_body,datam[:, 6:9]]) #Add moments to F_body
+#Add noise
+add_noise = True
+plot_noise = True
+if add_noise:
+    n_mean = 0
+    n_std = 0.05
+    noise = np.random.normal(n_mean, n_std, F_body.shape)
+    if plot_noise:
+        plot_data_noise(time,F_body,noise)
+    F_body = F_body + noise
 
 Ncoef = 8 # cant de coef a estimar
 Ny = 6
