@@ -27,8 +27,8 @@ g= 9.81  # aceleración de la gravedad
 Resul = ['Resu_RBD/Caso_F01/']
 
 #Read forces-moments data
-data = np.loadtxt(Resul[0]+'Forces_proc_F01_unificated.txt', delimiter=',', skiprows=1)
-datam = np.loadtxt(Resul[0]+'Moments_proc_F01_unificated.txt', delimiter=',', skiprows=1)
+data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)
+datam = np.loadtxt(Resul[0]+'Moments_proc.txt', delimiter=',', skiprows=1)
 xned = []
 h5f = h5py.File(Resul[0]+'Data.hdf5','r')
 # Read data from hdf5
@@ -37,18 +37,19 @@ h5f.close()
 
 # Propiedades fluido vs altura
 N = data.shape[0]
-#rho, mu, c = fluid_prop(xned[0][1:N+1,2], 0) # cuando se usa datos de data.hdf5
+rho, mu, c = fluid_prop(xned[0][1:N+1,2], 0)
 
 print(data.shape)
 
 # Encabezado del txt:
-# Time, alpha, beta, V_inf (= V_t), u(v_body_X), v(v_body_Y), w(v_body_Z), p, q, r, gx, gy, gz, FX, FY, FZ,ZE
+# Time, alpha, beta, V_inf (= V_t), u(v_body_X), v(v_body_Y), w(v_body_Z), p, q, r, gx, gy, gz, FX, FY, FZ
 
 time = data[:,0]
 alpha = data[:, 1]
 beta = data[:, 2]
 delta2 = ((np.sin(beta))**2 + (np.cos(beta))**2*(np.sin(alpha))**2) # alpha2
 vt = data[:, 3]
+mach = vt/c
 u = data[:, 4]  # vel_body_X
 v = data[:, 5]  # vel_body_Y
 w = data[:, 6]  # vel_body_Z
@@ -58,9 +59,6 @@ r = data[:, 9]
 grav = data[:, 10:13]  # gx, gy, gz
 F_body = data[:, 13:16]  # FX, FY, FZ
 F_body = np.column_stack([F_body,datam[:, 6:9]]) #Add moments to F_body
-ze = data[:,16]
-rho, mu, c = fluid_prop(ze, 0)
-mach = vt/c
 #Add noise
 add_noise = False
 plot_noise = False
