@@ -24,20 +24,24 @@ S = np.pi * (0.5 * diam) ** 2
 g= 9.81  # aceleración de la gravedad
 
 # Path to data
-Resul = ['Resu_RBD/Caso_F01/']
+#Resul = ['Resu_RBD/Caso_F01/']
+Resul = ['/home/ntrivi/Documents/Tesis/RBD/Resu_ref/Wernert_AIAA2010_7460/Caso_F01_unificated/']
 
 #Read forces-moments data
 data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)
 datam = np.loadtxt(Resul[0]+'Moments_proc.txt', delimiter=',', skiprows=1)
+N = data.shape[0]
 xned = []
 h5f = h5py.File(Resul[0]+'Data.hdf5','r')
 # Read data from hdf5
-xned.append(h5f['/Inertial_coord'][:])
+#xned.append(h5f['/Inertial_coord'][:,:])
+xned.append(h5f['/Inertial_coord'][1:N+1,:])
 h5f.close()
 
 # Propiedades fluido vs altura
-N = data.shape[0]
-rho, mu, c = fluid_prop(xned[0][1:N+1,2], 0)
+#rho, mu, c = fluid_prop(xned[0][1:N+1,2], 0)
+#rho, mu, c = fluid_prop(xned[0][1:N+1,2], 0)
+rho, mu, c = fluid_prop(xned[0][:,2], 0)
 
 print(data.shape)
 
@@ -48,7 +52,7 @@ time = data[:,0]
 alpha = data[:, 1]
 beta = data[:, 2]
 delta2 = ((np.sin(beta))**2 + (np.cos(beta))**2*(np.sin(alpha))**2) # alpha2
-vt = data[:, 3]
+vt = data[:,3]
 mach = vt/c
 u = data[:, 4]  # vel_body_X
 v = data[:, 5]  # vel_body_Y
