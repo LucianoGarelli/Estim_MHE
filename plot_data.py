@@ -10,8 +10,8 @@ def plot_data(Resul, data, mach, x):
     #Read forces data
     data_ref = np.loadtxt(Resul[0]+'Force_coef_proc.txt', delimiter=',', skiprows=1)
     mach_ref = data_ref[:,1]
-    alpha_ref = data_ref[:, 1]
-    beta_ref = data_ref[:, 2]
+    alpha_ref = data_ref[:, 2]
+    beta_ref = data_ref[:, 3]
     Cd0_ref = data_ref[:,5]
     Cdd2_ref = data_ref[:,6]
     CLa_ref = data_ref[:,7]
