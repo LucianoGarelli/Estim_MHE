@@ -10,10 +10,13 @@ def plot_data(Resul, data, mach, x):
     #Read forces data
     data_ref = np.loadtxt(Resul[0]+'Force_coef_proc.txt', delimiter=',', skiprows=1)
     mach_ref = data_ref[:,1]
+    alpha_ref = data_ref[:, 1]
+    beta_ref = data_ref[:, 2]
     Cd0_ref = data_ref[:,5]
     Cdd2_ref = data_ref[:,6]
     CLa_ref = data_ref[:,7]
     Cn_p_alfa = data_ref[:,8]
+    delta2_ref = ((np.sin(beta_ref))**2 + (np.cos(beta_ref))**2*(np.sin(alpha_ref))**2)
 
     fig_size = (15,5)
     leg = ['Estim', 'Used', 'Alpha', 'Beta', 'Tot']
@@ -30,9 +33,9 @@ def plot_data(Resul, data, mach, x):
     ax[0].plot(mach_ref, Cd0_ref,label=leg[1])
     ax[1].plot(mach, x[:,2])
     ax[1].plot(mach_ref, Cdd2_ref)
-    ax[2].plot(mach_ref, alpha * 180 / np.pi, label=leg[2])
-    ax[2].plot(mach_ref, beta * 180 / np.pi, label=leg[3])
-    ax[2].plot(mach_ref, np.sqrt(delta2) * 180 / np.pi, label=leg[4])
+    ax[2].plot(mach_ref, alpha_ref * 180 / np.pi, label=leg[2])
+    ax[2].plot(mach_ref, beta_ref * 180 / np.pi, label=leg[3])
+    ax[2].plot(mach_ref, np.sqrt(delta2_ref) * 180 / np.pi, label=leg[4])
     ax[0].legend()
     ax[2].legend()
 
@@ -40,7 +43,7 @@ def plot_data(Resul, data, mach, x):
     ax[4].plot(mach_ref, CLa_ref)
 
     ax[3].plot(mach, x[:,0] + x[:,2]*delta2)
-    ax[3].plot(mach_ref, Cd0_ref + Cdd2_ref*delta2)
+    ax[3].plot(mach_ref, Cd0_ref + Cdd2_ref*delta2_ref)
 
     ax[5].plot(mach, x[:,3])
     ax[5].plot(mach_ref, Cn_p_alfa)
