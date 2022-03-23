@@ -296,7 +296,7 @@ for k in range(N):
         guess[key] = np.concatenate((guess[key], guess[key][-1:]))
 
 #Save estimated coeficients
-save_data(time, mach, xhat)
+save_data(time, mach, alpha, xhat)
 
 #Plot data vs mach
 plot_data(Resul, data, mach, xhat)

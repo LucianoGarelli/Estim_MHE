@@ -2,7 +2,7 @@
 import os
 import numpy as np
 
-def save_data(time, mach, x):
+def save_data(time, mach, alpha, x):
 
     MYDIR = ("Resultados")
     CHECK_FOLDER = os.path.isdir(MYDIR)
@@ -16,11 +16,13 @@ def save_data(time, mach, x):
 
     #File to write force coeff
     ff = open("./Resultados/Coef_estim.txt", "w")  # xq le pasamos los las fuerzas de todo el CFD??
-    ff.write(" # Time,      Mach,      Cd0,    Cl_alpha,    Cd2,  Cn_p_alpha,    Clp,   Cm_alpha,    Cm_p_alpha,    Cm_q \n")
+    ff.write("#  Time  ,    Mach  ,  alpha_tot,    Cd0   ,  Cl_alpha,    Cd2   , Cn_p_alpha,    Clp    ,  Cm_alpha , Cm_p_alpha,    Cm_q \n")
+
 
     mach = mach.reshape(-1, 1)
     tt = time.reshape(-1, 1)
-    coefs2= np.asarray([tt[:,0], mach[:,0]]).T
+    alpha = alpha.reshape(-1, 1)
+    coefs2= np.asarray([tt[:,0], mach[:,0], alpha[:,0]]).T
     coefs = np.concatenate((coefs2,x),axis=1)
     #np.column_stack(time, mach[:,0])
     #np.column_stack(time, x[:,0:8])
