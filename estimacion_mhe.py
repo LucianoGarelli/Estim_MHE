@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 
-@author: lgenzelis, ntrivisonno
+@author: lgenzelis, ntrivisonno, gsanchez, lgarelli
 """
-
+import casadi as cs
 import numpy as np
 import matplotlib.pyplot as plt
-import mpctools
-import casadi
-from scipy import linalg
+import mpctools as mpc
 import h5py
 
 from parameters import parameters
@@ -21,21 +19,21 @@ from plot_data_noise import plot_data_noise
 m, diam, xcg, ycg, zcg, Ixx, Iyy, Izz, steps, dt = parameters('./Data/data_F01.dat')
 
 S = np.pi * (0.5 * diam) ** 2
-g= 9.81  # aceleración de la gravedad
+g = 9.81  # aceleración de la gravedad
 
 # Path to data
-#Resul = ['Resu_RBD/Caso_F01/']
-Resul = ['/home/ntrivi/Documents/Tesis/RBD/Resu_ref/Wernert_AIAA2010_7460/Caso_F01_unificated/']
+Resul = ['/home/ntrivi/Documents/Tesis/RBD/Resu_ref/Wernert_AIAA2010_7460/Caso_F01/'] 
+#Resul = ['/home/ntrivi/Documents/Tesis/RBD/Resu_ref/Wernert_AIAA2010_7460/Caso_F01_unificated/']
 
 #Read forces-moments data
 data = np.loadtxt(Resul[0]+'Forces_proc.txt', delimiter=',', skiprows=1)
 datam = np.loadtxt(Resul[0]+'Moments_proc.txt', delimiter=',', skiprows=1)
-N = data.shape[0]
+Nsim = data.shape[0]
 xned = []
 h5f = h5py.File(Resul[0]+'Data.hdf5','r')
 # Read data from hdf5
 #xned.append(h5f['/Inertial_coord'][:,:])
-xned.append(h5f['/Inertial_coord'][1:N+1,:])
+xned.append(h5f['/Inertial_coord'][1:Nsim+1,:])
 h5f.close()
 
 # Propiedades fluido vs altura
@@ -63,6 +61,7 @@ r = data[:, 9]
 grav = data[:, 10:13]  # gx, gy, gz
 F_body = data[:, 13:16]  # FX, FY, FZ
 F_body = np.column_stack([F_body,datam[:, 6:9]]) #Add moments to F_body
+
 #Add noise
 add_noise = False
 plot_noise = False
@@ -74,31 +73,31 @@ if add_noise:
         plot_data_noise(time,F_body,noise)
     F_body = F_body + noise
 
-Ncoef = 8 # cant de coef a estimar
-Ny = 6
-Nw = Ncoef
-Nv = Ny # cant ruido medicion, simil cant mediciones
-Np = 8 # cant de parametros al solver
-Nt = 1  # horizonte
+Nx = 8 # Number of coef wanted to estimate
 Nu = 0
+Nw = Nx
+Nz = 2
+Np = 8  # Number de parameters given to solver
+Ny = 6
+Nv = Ny # Number of mesuarements noise, equal number of mesuarements
+Delta = 0.01
+Nc = 3  # Number of collocation points
+Nt = 20 # Horizon windows
 
-Q = np.diag([.1] * Ncoef)  # matrix de covarianza de ruido de proceso
-#Q = np.diag([1E1, 1E1, 1E4, 1E-3, 1E1, 1E1, 1E5, 1E5])
-Q[0,0] = 10
-Q[2,2] = 1
-R = np.diag([1]*Ny)     # matrix de covarianza de ruido de  medición
-#P = np.diag([10.] * Ncoef)    # matrix de covarianza de estimación inicial
-#           [Cd0, Cl_alpha, Cd2, Cn_p_alpha, Clp, Cm_alpha, Cm_alpha, Cm_q]
-P = np.diag([1E4, 1E1, 5E5, 1E-3, 1E1, 1E1, 1E5, 1E5]) # matrix de covarianza de estimación inicial
+# Explicit z function
+def zfunc(x, p):
+    return [x[0] + x[2] * p[3], 0.5 * p[7] * p[0] ** 2]
 
-Q_inv = linalg.inv(Q)
-R_inv = linalg.inv(R)
+# ODE for VPO with and without z
+def odefunc(x, u, z, p, w):
+    return 0. + w
 
-def ode(x, u, w):
-    dxdt = 0. + w
-    return np.array(dxdt)
+# Algebraic function for implicit solution of z
+def gfunc(x,z,p):
+    return z - zfunc(x, p)
 
-def meas(x, p):
+# Measurement function
+def hmeas(x, z, p):
     '''
     x[0]: Cd0
     x[1]: Cl_alpha
@@ -123,14 +122,14 @@ def meas(x, p):
     y[4]: My
     y[5]: Mz
     '''
-    qdy = 0.5 * p[7] * p[0] ** 2
-    y = casadi.SX.zeros(Ny)
+    qdy = z[1]  # 0.5 * p[7] * p[0] ** 2
+    y = cs.SX.zeros(Ny)
 
     ca = np.cos(p[1])
     sa = np.sin(p[1])
     cb = np.cos(p[2])
     sb = np.sin(p[2])
-    Cd = x[0] + x[2] * p[3]
+    Cd = z[0]  # x[0] + x[2] * p[3]
     CL_alfa = x[1]
     Cn_p_alfa = x[3]
     Clp = x[4]
@@ -148,100 +147,64 @@ def meas(x, p):
     assert Ny == 6
     return y
 
-# no importa el Delta que ponga (por cómo es mi "ode")
-F = mpctools.getCasadiFunc(ode, [Ncoef, Nu, Nw], ["x", "u", "w"], "F", rk4=True, Delta=.1)
-H = mpctools.getCasadiFunc(meas, [Ncoef, Np], ["x", "p"], "H")
+# Get casadi functions for ODE and DAE
+# fode = mpc.getCasadiFunc(odefunc,[Nx,Nu],["x","u"],funcname="fode")
+fdae = mpc.getCasadiFunc(odefunc, [Nx, Nu, Nz, Np, Nw],["x", "u", "z", "p", "w"], funcname="fdae")
+gdae = mpc.getCasadiFunc(gfunc, [Nx, Nz, Np],["x", "z", "p"], funcname="gdae")
+hmeas = mpc.getCasadiFunc(hmeas, [Nx, Nz, Np], ["x", "z", "p"], "hmeas")
 
-# Costo de etapa
-def lfunc(w, v):
-    return mpctools.mtimes(w.T, Q_inv, w) + mpctools.mtimes(v.T, R_inv, v)
-l = mpctools.getCasadiFunc(lfunc, [Nw, Nv], ["w", "v"], "l")
 
-# Costo de arrivo
-def lxfunc(x, x0bar, Pinv):
+Q = np.eye(Nx)
+R = np.eye(Ny)
+Pinv = np.eye(Nx)
+
+# Define stage cost
+def stagecost(w, v):
+    return mpc.mtimes(w.T, Q, w) + mpc.mtimes(v.T, R, v)
+l = mpc.getCasadiFunc(stagecost, [Nw, Nv], ["w", "v"], "l")
+
+# Define arrival cost
+def arrivalcost(x, x0bar, Pinv):
     dx = x - x0bar
-    if Ncoef == 1:
-        return mpctools.mtimes(dx.T, dx) * Pinv
-    else:
-        return mpctools.mtimes(dx.T, Pinv, dx)
-lx = mpctools.getCasadiFunc(lxfunc, [Ncoef, Ncoef, (Ncoef, Ncoef)], ["x", "x0bar", "Pinv"], "lx")
+    return mpc.mtimes(dx.T, Pinv, dx)
+lx = mpc.getCasadiFunc(arrivalcost, [Nx, Nx, (Nx, Nx)], ["x", "x0bar", "Pinv"], "lx")
 
-xhat = np.zeros((N, Ncoef))
-yhat = np.zeros((N, Nv))
-x0bar = np.zeros(Ncoef)
-#x0bar = np.array([0,0,0,0,0]) # valor inicio al para el solver
-guess = {}
+# Size of variables
+N = {"x":Nx, "z":Nz, "p":Np, 'c':Nc, "t":Nt, "u": Nu, "y": Ny}
 
-#Definition of lower(lb) and upper(ub) bounds for coef estimations
-#                Cd0, Cl_alpha, Cd2, Cn_p_alpha, Clp, Cm_alpha, Cm_p_alpha, Cm_q
+# Initial state
+# x0 = np.array([0,0,0,0,0,0,0,0])
+x0bar = np.array([ 2.96736843e-01,  2.74668167e+00,  3.45, -7.66722171e-01, -1.04984336e-02, -3.16870955e+00, -4.80740759e-01, -14])
+# Bounds on optimization variables
 x_lb = np.array([ 0,       0  ,   0, -np.inf, -np.inf,    -np.inf  , -np.inf, -np.inf])
 x_ub = np.array([np.inf, np.inf, 10,     0,       0,         0 ,       np.inf,  0])
+z_lb = np.array([0, -np.inf])
+z_ub = np.array([np.inf, np.inf])
+w_lb = np.zeros((Nw,))
+w_ub = np.zeros((Nw,))
 lb = {
-    "x" : np.tile(x_lb, (Nt+1,1))
+    "x" : np.tile(x_lb, (Nt+1,1)),
+    "z" : np.tile(z_lb, (Nt+1,1)),
+    "w" : np.tile(w_lb, (Nt,1))
 }
 ub = {
-    "x" : np.tile(x_ub, (Nt+1,1))
+    "x" : np.tile(x_ub, (Nt+1,1)),
+    "z" : np.tile(z_ub, (Nt+1,1)),
+    "w" : np.tile(w_ub, (Nt,1))
 }
 
-def ekf(f, h, x, u, w, y, p, P, Q, R, f_jacx=None, f_jacw=None, h_jacx=None):
-    """
-    EKF copiado del de mpctools, para adaptarlo a que H dependa de p también.
+# ODE arguements
 
-    Updates the prior distribution P^- using the Extended Kalman filter.
+xhat = np.zeros((Nsim, Nx))
+yhat = np.zeros((Nsim, Ny))
+zhat = np.zeros((Nsim, Nz))
 
-    f and h should be casadi functions. f must be discrete-time. P, Q, and R
-    are the prior, state disturbance, and measurement noise covariances. Note
-    that f must be f(x,u,w) and h must be h(x).
+# solver = mpc.nmhe(**nmheargs)
+# sol_dae = mpc.callSolver(solver)
+# xhat[tmin:tmax] = sol_dae['x']
 
-    If specified, f_jac and h_jac should be initialized jacobians. This saves
-    some time if you're going to be calling this many times in a row, although
-    it's really not noticable unless the models are very large. Note that they
-    should return a single argument and can be created using
-    mpctools.util.jacobianfunc.
-
-    The value of x that should be fed is xhat(k | k-1), and the value of P
-    should be P(k | k-1). xhat will be updated to xhat(k | k) and then advanced
-    to xhat(k+1 | k), while P will be updated to P(k | k) and then advanced to
-    P(k+1 | k). The return values are a list as follows
-
-        [P(k+1 | k), xhat(k+1 | k), P(k | k), xhat(k | k)]
-
-    Depending on your specific application, you will only be interested in
-    some of these values.
-    """
-
-    # Check jacobians.
-    if f_jacx is None:
-        f_jacx = mpctools.util.jacobianfunc(f, 0)
-    if f_jacw is None:
-        f_jacw = mpctools.util.jacobianfunc(f, 2)
-    if h_jacx is None:
-        h_jacx = mpctools.util.jacobianfunc(h, 0)
-
-    # Get linearization of measurement.
-    C = np.array(h_jacx(x, p))
-    yhat = np.array(h(x, p)).flatten()
-
-    # Advance from x(k | k-1) to x(k | k).
-    xhatm = x                                          # This is xhat(k | k-1)
-    Pm = P                                             # This is P(k | k-1)
-    L = linalg.solve(C.dot(Pm).dot(C.T) + R, C.dot(Pm)).T
-    xhat = xhatm + L.dot(y - yhat)                     # This is xhat(k | k)
-    P = (np.eye(Pm.shape[0]) - L.dot(C)).dot(Pm)       # This is P(k | k)
-
-    # Now linearize the model at xhat.
-    w = np.zeros(w.shape)
-    A = np.array(f_jacx(xhat, u, w))
-    G = np.array(f_jacw(xhat, u, w))
-
-    # Advance.
-    Pmp1 = A.dot(P).dot(A.T) + G.dot(Q).dot(G.T)       # This is P(k+1 | k)
-    xhatmp1 = np.array(f(xhat, u, w)).flatten()     # This is xhat(k+1 | k)
-
-    return [Pmp1, xhatmp1, P, xhat]
-
-for k in range(N):
-    N = {"x": Ncoef, "y": Ny, "p": Np, "u": Nu}
+for k in range(Nsim):
+    # N = {"x": Nx, "y": Ny, "p": Np, "u": Nu}
     N["t"] = min(k, Nt)
     tmin = max(0, k - Nt)
     tmax = k+1  # para que en los slice cuando ponga :tmax tome hasta k *inclusive*
@@ -251,31 +214,56 @@ for k in range(N):
     assert p_coefs.shape == (N["t"] + 1, Np)
 
 
-    # Armo y llamo al solver. Si todavía no llené el horizonte, armo uno nuevo. Sino reúso el viejo., arma un problema de MHE de 1 a 10
+    # Armo y llamo al solver. Si todavía no llené el horizonte, armo uno nuevo. Sino reúso el viejo, arma un problema de MHE de 1 a 10
     if k <= Nt:
-        solver = mpctools.nmhe(f=F, h=H, u=np.zeros((tmax-tmin-1, Nu)), p=p_coefs,
-                               y=F_body[tmin:tmax, :], l=l, N=N, lx=lx,
-                               x0bar=x0bar, verbosity=0, guess=guess, lb=lb, ub=ub,
-                               extrapar=dict(Pinv=linalg.inv(P)), inferargs=True)
+        nmheargs = {
+            "f": fdae,
+            "g": gdae,
+            "h": hmeas,
+            "u": np.zeros((tmax - tmin - 1, Nu)),
+            "p": p_coefs,
+            "y": F_body[tmin:tmax, :],
+            "l": l,
+            "lx": lx,
+            "N": N,
+            "x0bar": x0bar,
+            "lb": lb,
+            "ub": ub,
+            "Delta": Delta,
+            "extrapar": dict(Pinv=Pinv),
+            "inferargs": True,
+            "verbosity": 0
+        }
+
+        # nmheargs["u"] = np.zeros((tmax - tmin - 1, Nu))
+        # nmheargs["p"] = p_coefs
+        # nmheargs["y"] = F_body[tmin:tmax, :]
+        # solver = mpc.nmhe(f=F, h=H, u=np.zeros((tmax-tmin-1, Nu)), p=p_coefs,
+        #                        y=F_body[tmin:tmax, :], l=l, N=N, lx=lx,
+        #                        x0bar=x0bar, verbosity=0, guess=guess, lb=lb, ub=ub,
+        #                        extrapar=dict(Pinv=linalg.inv(P)), inferargs=True)
+        solver = mpc.nmhe(**nmheargs)
     else:
-        solver.par["Pinv"] = linalg.inv(P)
+        solver.par["Pinv"] = Pinv
         solver.par["x0bar"] = x0bar
         #solver.saveguess()
         solver.par["y"] = list(F_body[tmin:tmax, :])
         solver.par["p"] = list(p_coefs)
-    sol = mpctools.callSolver(solver)
+    sol = mpc.callSolver(solver)
 
     #print("x0bar",x0bar)
     #print("x0est",sol["x"][0])
     #input("Presione enter") # esto es para que pause y cont con (enter)
 
+    # print(("%3d: %s" % (k, sol["status"])))
     if (k % 500) == 0:
         print(("%3d: %s" % (k, sol["status"])))
     if sol["status"] != "Solve_Succeeded":
         break
 
     xhat[k] = sol["x"][-1]  # xhat( t  | t )
-    yhat[k] = np.squeeze(H(xhat[k], p_coefs[-1]))
+    zhat[k] = sol["z"][-1]
+    yhat[k] = np.squeeze(hmeas(xhat[k], zhat[k], p_coefs[-1]))
 
     # Armo el guess.
     guess = {}
@@ -294,6 +282,19 @@ for k in range(N):
     # Repito el último guess como guess del nuevo instante de tiempo
     for key in guess.keys():
         guess[key] = np.concatenate((guess[key], guess[key][-1:]))
+
+# Solve and plot for initial horizon
+# sol_ode = mpc.callSolver(solvers["ode"])
+# sol_dae = mpc.callSolver(solvers["dae"])
+
+x_ = cs.SX.sym('X', Nx)  # Differential states
+u_ = cs.SX.sym('U', Nu)  # Fictitious control
+w_ = cs.SX.sym('W', Nw)  # Differential states
+z_ = cs.SX.sym('Z', Nz)  # Algebraic states
+p_ = cs.SX.sym('P', Np)  # System parameters
+y_ = cs.SX.sym('Y', Ny)  # Measurements
+print("fdae(x,z,p,w): ", fdae(x_,u_,z_,p_,w_))
+print("gdae(x,z,p): ", gdae(x_,z_,p_))
 
 #Save estimated coeficients
 save_data(time, mach, alpha, xhat)
